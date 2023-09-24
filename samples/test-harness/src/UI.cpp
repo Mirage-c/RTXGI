@@ -235,7 +235,7 @@ namespace Graphics
         /**
          * Creates the main debug window.
          */
-        void CreateDebugWindow(Graphics::Globals& gfx, Configs::Config& config, Inputs::Input& input, Scenes::Scene& scene, std::vector<DDGIVolumeBase*>& volumes)
+        void CreateDebugWindow(Graphics::Globals& gfx, Configs::Config& config, Inputs::Input& input, Scenes::Scene& scene, std::vector<DDGIVolumeBase*>& volumes, std::ofstream& log)
         {
             SetupStyle();
 
@@ -821,6 +821,28 @@ namespace Graphics
                     {
                         config.ddgi.volumes[config.ddgi.selectedVolume].clearProbes = 1;
                         volumeChanged[config.ddgi.selectedVolume] = true;
+                    }
+
+
+                    if (ImGui::Checkbox("Radiance Spread", &config.ddgi.volumes[config.ddgi.selectedVolume].useRadianceSpread)) {
+                        volume->SetRadianceSpread(config.ddgi.volumes[config.ddgi.selectedVolume].useRadianceSpread);
+                        config.ddgi.reload = true;
+                        // clear probes
+                        config.ddgi.volumes[config.ddgi.selectedVolume].clearProbes = 1;
+                        volumeChanged[config.ddgi.selectedVolume] = true;
+                    }
+                    ImGui::SameLine(); AddQuestionMark("Spread the radiance to the adjacent probes.");
+
+                    {
+                        int numRays = desc.probeNumRays;
+                        ImGui::DragInt("##probeNumRays", &numRays, 1, 1, 256, "Rays per Probe: %.i");
+                        AddHoverToolTip("The number of rays per probe traced each frame");
+                        volume->SetProbeNumRays(numRays);
+                        if (numRays != desc.probeNumRays) {
+                            // clear probes
+                            config.ddgi.volumes[config.ddgi.selectedVolume].clearProbes = 1;
+                            volumeChanged[config.ddgi.selectedVolume] = true;
+                        }
                     }
 
                     if (ImGui::Checkbox("Insert Performance Markers##ddgivolume-perf-markers", &config.ddgi.volumes[config.ddgi.selectedVolume].insertPerfMarkers))

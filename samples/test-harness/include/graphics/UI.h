@@ -30,7 +30,7 @@ namespace Graphics
         extern bool s_initialized;
 
         bool Initialize(Graphics::Globals& gfx, Graphics::GlobalResources& gfxResources, Resources& resources, Instrumentation::Performance& perf, std::ofstream& log);
-        void Update(Graphics::Globals& gfx, Resources& resources, Configs::Config& config, Inputs::Input& input, Scenes::Scene& scene, std::vector<DDGIVolumeBase*>& volumes, const Instrumentation::Performance& performance);
+        void Update(Graphics::Globals& gfx, Resources& resources, Configs::Config& config, Inputs::Input& input, Scenes::Scene& scene, std::vector<DDGIVolumeBase*>& volumes, const Instrumentation::Performance& performance, std::ofstream& log);
         bool MessageBox(std::string message);
         bool MessageRetryBox(std::string message);
         bool CapturedMouse();
@@ -38,7 +38,7 @@ namespace Graphics
         void Execute(Graphics::Globals& gfx, Graphics::GlobalResources& gfxResources, Resources& resources, const Configs::Config& config);
         void Cleanup();
 
-        void CreateDebugWindow(Graphics::Globals& gfx, Configs::Config& config, Inputs::Input& input, Scenes::Scene& scene, std::vector<DDGIVolumeBase*>& volumes);
+        void CreateDebugWindow(Graphics::Globals& gfx, Configs::Config& config, Inputs::Input& input, Scenes::Scene& scene, std::vector<DDGIVolumeBase*>& volumes, std::ofstream& log);
         void CreatePerfWindow(Graphics::Globals& gfx, const Configs::Config& config, const Instrumentation::Performance& performance);
     }
 }

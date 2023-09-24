@@ -400,6 +400,131 @@ void DDGIProbeBlendingCS(
         float2 probeOctantUV = DDGIGetNormalizedOctahedralCoordinates(int2(threadCoords.xy), RTXGI_DDGI_PROBE_NUM_INTERIOR_TEXELS);
         float3 probeRayDirection = DDGIGetOctahedralDirection(probeOctantUV);
 
+        // Blend each ray's radiance or distance values to compute irradiance or fitered distance
+        float4 result = float4(0.f, 0.f, 0.f, 0.f);
+
+        /***
+         * ADDED BY CT
+         ***/
+#if RTXGI_CT_SPREAD_RADIANCE
+        // 读取相邻probe的光线信息到共享内存中，sync一下
+
+        // 选取一个相邻probe
+        int adjacentProbeIndex = -1;
+        int3 adjacentProbeCoords = int3(-1, -1, -1);
+        // Get the probe's grid coordinates
+        int3 probeCoords = DDGIGetProbeCoords(probeIndex, volume);
+        for (int i = 0; i < 6; i++)
+        {
+            // Compute the offset to the adjacent probe in grid coordinates by
+            // sourcing the offsets from the bits of the loop index: x = bit 0, y = bit 1, z = bit 2
+            int3 adjacentProbeOffset = int3(0, 0, 0);
+            if (i < 3)
+                adjacentProbeOffset[i] = 1;
+            else
+                adjacentProbeOffset[i - 3] = -1;
+            // Get the 3D grid coordinates of the adjacent probe by adding the offset to
+            // the base probe and clamping to the grid boundaries
+            int3 adjacentProbeCoords = clamp(probeCoords + adjacentProbeOffset, int3(0, 0, 0), volume.probeCounts - int3(1, 1, 1));
+            if (all(adjacentProbeCoords == probeCoords)) continue;
+            adjacentProbeIndex = DDGIGetProbeIndex(adjacentProbeCoords, volume);
+            if (DDGILoadProbeState(adjacentProbeIndex, ProbeData, volume) == RTXGI_DDGI_PROBE_STATE_INACTIVE) {
+                adjacentProbeIndex = -1;
+                continue;
+            }
+            float3 adjacentProbeWorldPos = DDGIGetProbeWorldPosition(adjacentProbeCoords, volume, ProbeData);
+            float3 probeWorldPos = DDGIGetProbeWorldPosition(probeCoords, volume, ProbeData);
+            // Cooperatively load the ray radiance and hit distance values into shared memory
+            // Cooperatively compute probe ray directions
+            int totalIterations = int(ceil(float(RTXGI_DDGI_BLEND_RAYS_PER_PROBE) / float(RTXGI_DDGI_PROBE_NUM_TEXELS * RTXGI_DDGI_PROBE_NUM_TEXELS)));
+            // 线程总数即为纹素总数
+            for (int iteration = 0; iteration < totalIterations; iteration++)
+            {
+                int rayIndex = (GroupIndex * totalIterations) + iteration;
+                if (rayIndex >= RTXGI_DDGI_BLEND_RAYS_PER_PROBE) break;
+
+                // Get the coordinates for the probe ray in the RayData texture array
+                uint3 rayDataTexCoords = DDGIGetRayDataTexelCoords(rayIndex, adjacentProbeIndex, volume);
+
+                // Load the ray radiance and store it in shared memory
+                RayRadiance[rayIndex] = DDGILoadProbeRayRadiance(RayData, rayDataTexCoords, volume);
+
+                // Load the ray hit distance and store it in shared memory
+                float dist = DDGILoadProbeRayDistance(RayData, rayDataTexCoords, volume);
+
+                // Get a random normalized probe ray direction and store it in shared memory
+                float3 dir = DDGIGetProbeRayDirection(rayIndex, volume);
+
+                // 计算光线与场景交点，计算出到本probe的方向
+                if (dist < 0) { // backface hit
+                    float3 shadingPointWorldPos = adjacentProbeWorldPos - dir * dist;
+                    dir = normalize(shadingPointWorldPos - probeWorldPos);
+                    dist = -1 * length(shadingPointWorldPos - probeWorldPos);
+                } else {
+                    float3 shadingPointWorldPos = adjacentProbeWorldPos + dir * dist;
+                    dir = normalize(shadingPointWorldPos - probeWorldPos);
+                    dist = length(shadingPointWorldPos - probeWorldPos);
+                }
+                RayDirection[rayIndex] = dir;
+                RayDistance[rayIndex] = dist;
+                /*{
+                    // Compute the octahedral coordinates of the adjacent probe
+                    float2 octantCoords = DDGIGetOctahedralCoordinates(dir);
+
+                    // Get the texture atlas coordinates for the octant of the probe
+                    float2 probeTextureUV = DDGIGetProbeUV(adjacentProbeIndex, octantCoords, volume.probeNumDistanceTexels, volume);
+
+                    // Sample the probe's distance texture to get the mean distance to nearby surfaces
+                    float2 filteredDistance = Dist[probeTextureUV].rg;
+
+                    // Find the variance of the mean distance
+                    float variance = abs((filteredDistance.x * filteredDistance.x) - filteredDistance.y);
+
+                    // Occlusion test
+                    float chebyshevWeight = 1.f;
+                    if (dist > filteredDistance.x) // occluded
+                    {
+                        // v must be greater than 0, which is guaranteed by the if condition above.
+                        float v = dist - filteredDistance.x;
+                        chebyshevWeight = variance / (variance + (v * v));
+
+                        // Increase the contrast in the weight
+                        chebyshevWeight = max((chebyshevWeight * chebyshevWeight * chebyshevWeight), 0.f);
+                    }
+                    ChebyshevWeight[rayIndex] = chebyshevWeight;
+                }*/
+            }
+
+            // Wait for all threads in the group to finish their shared memory operations
+            GroupMemoryBarrierWithGroupSync();
+            // 遍历光线进行blend
+            int rayIndex = 0;
+            // Blend each ray's radiance or distance values to compute irradiance or fitered distance
+            for (/*rayIndex*/; rayIndex < volume.probeNumRays; rayIndex++)
+            {
+                // Backface hit, don't blend this sample
+                if (RayDistance[rayIndex] < 0.f)
+                    continue;
+                float3 radiance = RayRadiance[rayIndex];
+                // if (all(radiance.xyz == float3(0))) // ignore miss
+                //     continue;
+                // Get the direction for this probe ray
+                float3 rayDirection = RayDirection[rayIndex];
+
+                // Find the weight of the contribution for this ray
+                // Weight is based on the cosine of the angle between the ray direction and the direction of the probe octant's texel
+                float weight = max(0.f, dot(probeRayDirection, rayDirection)); // * ChebyshevWeight[rayIndex];
+
+                // TODO: 计算可见性weight
+                // The indices of the probe ray in the radiance buffer
+                // uint2 probeRayIndex = uint2(rayIndex, probeIndex);
+
+                // Blend the ray's radiance
+                result += float4(radiance * weight, weight);
+            }
+        }
+#endif // RTXGI_CT_SPREAD_RADIANCE
+
         int rayIndex = 0;
 
         // If relocation or classification are enabled, don't blend the fixed rays since they will bias the result
@@ -416,8 +541,6 @@ void DDGIProbeBlendingCS(
         uint maxBackfaces = uint((volume.probeNumRays - rayIndex) * volume.probeRandomRayBackfaceThreshold);
     #endif
 
-        // Blend each ray's radiance or distance values to compute irradiance or fitered distance
-        float4 result = float4(0.f, 0.f, 0.f, 0.f);
         for ( ; rayIndex < volume.probeNumRays; rayIndex++)
         {
             // Get the direction for this probe ray

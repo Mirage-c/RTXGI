@@ -45,6 +45,8 @@ namespace Configs
         bool               probeVariabilityEnabled = false;
         bool               infiniteScrollingEnabled = false;
         bool               clearProbeVariability = false;
+        // added by ct
+        bool               useRadianceSpread = false;
 
         DirectX::XMFLOAT3  origin = { 0.f, 0.f, 0.f };
         DirectX::XMFLOAT3  eulerAngles = { 0.f, 0.f, 0.f };

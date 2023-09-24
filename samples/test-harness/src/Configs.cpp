@@ -637,6 +637,9 @@ namespace Configs
             log << "\nError: failed to load configuration file: '" << config.app.filepath << "'\n";
             return false;
         }
+        else {
+            log << "\nLoading configuration file from: " << config.app.filepath << "'\n";
+        }
 
         // Read the config file to a buffer
         size_t fileSize = (size_t)file.tellg();

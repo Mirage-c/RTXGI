@@ -61,7 +61,8 @@ namespace Graphics
                 Inputs::Input& input,
                 Scenes::Scene& scene,
                 std::vector<DDGIVolumeBase*>& volumes,
-                const Instrumentation::Performance& perf)
+                const Instrumentation::Performance& perf,
+                std::ofstream& log)
             {
                 CPU_TIMESTAMP_BEGIN(resources.cpuStat);
 
@@ -72,7 +73,7 @@ namespace Graphics
                     ImGui_ImplGlfw_NewFrame();
                     ImGui::NewFrame();
 
-                    Graphics::UI::CreateDebugWindow(d3d, config, input, scene, volumes);
+                    Graphics::UI::CreateDebugWindow(d3d, config, input, scene, volumes, log);
                     Graphics::UI::CreatePerfWindow(d3d, config, perf);
                 }
 
@@ -149,9 +150,9 @@ namespace Graphics
             return Graphics::D3D12::UI::Initialize(d3d, d3dResources, resources, perf, log);
         }
 
-        void Update(Globals& d3d, Resources& resources, Configs::Config& config, Inputs::Input& input, Scenes::Scene& scene, std::vector<DDGIVolumeBase*>& volumes, const Instrumentation::Performance& perf)
+        void Update(Globals& d3d, Resources& resources, Configs::Config& config, Inputs::Input& input, Scenes::Scene& scene, std::vector<DDGIVolumeBase*>& volumes, const Instrumentation::Performance& perf, std::ofstream& log)
         {
-            return Graphics::D3D12::UI::Update(d3d, resources, config, input, scene, volumes, perf);
+            return Graphics::D3D12::UI::Update(d3d, resources, config, input, scene, volumes, perf, log);
         }
 
         void Execute(Globals& d3d, GlobalResources& d3dResources, Resources& resources, const Configs::Config& config)

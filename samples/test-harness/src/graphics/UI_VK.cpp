@@ -89,7 +89,8 @@ namespace Graphics
                 Inputs::Input& input,
                 Scenes::Scene& scene,
                 std::vector<DDGIVolumeBase*>& volumes,
-                const Instrumentation::Performance& perf)
+                const Instrumentation::Performance& perf,
+                std::ofstream& log)
             {
                 CPU_TIMESTAMP_BEGIN(resources.cpuStat);
 
@@ -100,7 +101,7 @@ namespace Graphics
                     ImGui_ImplGlfw_NewFrame();
                     ImGui::NewFrame();
 
-                    Graphics::UI::CreateDebugWindow(vk, config, input, scene, volumes);
+                    Graphics::UI::CreateDebugWindow(vk, config, input, scene, volumes, log);
                     Graphics::UI::CreatePerfWindow(vk, config, perf);
                 }
 
@@ -170,9 +171,9 @@ namespace Graphics
             return Graphics::Vulkan::UI::Initialize(vk, vkResources, resources, perf, log);
         }
 
-        void Update(Globals& vk, Resources& resources, Configs::Config& config, Inputs::Input& input, Scenes::Scene& scene, std::vector<DDGIVolumeBase*>& volumes, const Instrumentation::Performance& perf)
+        void Update(Globals& vk, Resources& resources, Configs::Config& config, Inputs::Input& input, Scenes::Scene& scene, std::vector<DDGIVolumeBase*>& volumes, const Instrumentation::Performance& perf, std::ofstream& log)
         {
-            return Graphics::Vulkan::UI::Update(vk, resources, config, input, scene, volumes, perf);
+            return Graphics::Vulkan::UI::Update(vk, resources, config, input, scene, volumes, perf, log);
         }
 
         void Execute(Globals& vk, GlobalResources& vkResources, Resources& resources, const Configs::Config& config)

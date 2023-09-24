@@ -266,6 +266,7 @@ int Run(const std::vector<std::string>& arguments)
 
             if (config.ddgi.reload)
             {
+                log << "DDGI Reloading...";
                 if (!Graphics::DDGI::Reload(gfx, gfxResources, ddgi, config, log)) break;
                 if (!Graphics::DDGI::Visualizations::Reload(gfx, gfxResources, ddgi, ddgiVis, config, log)) break;
                 config.ddgi.reload = false;
@@ -364,7 +365,7 @@ int Run(const std::vector<std::string>& arguments)
 
         // UI
         CPU_TIMESTAMP_BEGIN(perf.cpuTimes[perf.cpuTimes.size() - 2]);
-        Graphics::UI::Update(gfx, ui, config, input, scene, ddgi.volumes, perf);
+        Graphics::UI::Update(gfx, ui, config, input, scene, ddgi.volumes, perf, log);
         Graphics::UI::Execute(gfx, gfxResources, ui, config);
         CPU_TIMESTAMP_ENDANDRESOLVE(perf.cpuTimes[perf.cpuTimes.size() - 2]);
 

@@ -131,6 +131,8 @@ namespace Graphics
             std::wstring numDistanceTexels = std::to_wstring(volumeDesc.probeNumDistanceTexels);
             std::wstring numDistanceInteriorTexels = std::to_wstring(volumeDesc.probeNumDistanceInteriorTexels);
             std::wstring waveLaneCount = std::to_wstring(gfx.features.waveLaneCount);
+            // added by ct
+            std::wstring useRadianceSpread = std::to_wstring(volumeDesc.radianceSpread);
 
             std::wstring root = std::wstring(gfx.shaderCompiler.rtxgi.begin(), gfx.shaderCompiler.rtxgi.end());
 
@@ -145,6 +147,8 @@ namespace Graphics
                 // Add common shader defines
                 AddCommonShaderDefines(shader, volumeDesc, spirv);
 
+                // added by ct
+                Shaders::AddDefine(shader, L"RTXGI_CT_SPREAD_RADIANCE", useRadianceSpread.c_str());
                 // Add shader specific defines
                 Shaders::AddDefine(shader, L"RTXGI_DDGI_BLEND_RADIANCE", L"1");
                 Shaders::AddDefine(shader, L"RTXGI_DDGI_PROBE_NUM_TEXELS", numIrradianceTexels.c_str());
@@ -176,6 +180,7 @@ namespace Graphics
                 AddCommonShaderDefines(shader, volumeDesc, spirv);
 
                 // Add shader specific defines
+                Shaders::AddDefine(shader, L"RTXGI_CT_SPREAD_RADIANCE", L"0");
                 Shaders::AddDefine(shader, L"RTXGI_DDGI_BLEND_RADIANCE", L"0");
                 Shaders::AddDefine(shader, L"RTXGI_DDGI_PROBE_NUM_TEXELS", numDistanceTexels.c_str());
                 Shaders::AddDefine(shader, L"RTXGI_DDGI_PROBE_NUM_INTERIOR_TEXELS", numDistanceInteriorTexels.c_str());
