@@ -134,7 +134,7 @@ void CS(uint3 DispatchThreadID : SV_DispatchThreadID)
         float3 coords = float3(sliceUV, sliceIndex);
 
         // Sample the distance texture array
-        color.r = 2.f * ProbeDistance.SampleLevel(GetPointClampSampler(), coords, 0).r;
+        color.r = 8.f * ProbeDistance.SampleLevel(GetPointClampSampler(), coords, 0).r; // 本来是2.f，酌情调高
 
         // Normalize for display
         color.r = saturate(color.r / GetGlobalConst(ddgivis, distanceDivisor));
@@ -288,7 +288,9 @@ void CS(uint3 DispatchThreadID : SV_DispatchThreadID)
 
         if (volume.probeRayDataFormat == RTXGI_DDGI_VOLUME_TEXTURE_FORMAT_F32x4)
         {
-            color = RayData.SampleLevel(GetPointClampSampler(), coords, 0).rgb;
+            // color = RayData.SampleLevel(GetPointClampSampler(), coords, 0).rgb;
+
+            color = RTXGIUintToFloat3(asuint(RayData.SampleLevel(GetPointClampSampler(), coords, 0).r));
         }
         else if (volume.probeRayDataFormat == RTXGI_DDGI_VOLUME_TEXTURE_FORMAT_F32x2)
         {

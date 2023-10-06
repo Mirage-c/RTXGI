@@ -21,7 +21,9 @@ void DDGIStoreProbeRayMiss(RWTexture2DArray<float4> RayData, uint3 coords, DDGIV
 {
     if (volume.probeRayDataFormat == RTXGI_DDGI_VOLUME_TEXTURE_FORMAT_F32x4)
     {
-        RayData[coords] = float4(radiance, 1e27f);
+        // RayData[coords] = float4(radiance, 1e27f);
+
+        RayData[coords] = float4(asfloat(RTXGIFloat3ToUint(radiance)), 1e27f, 0.f, 0.f);
     }
     else if (volume.probeRayDataFormat == RTXGI_DDGI_VOLUME_TEXTURE_FORMAT_F32x2)
     {
@@ -29,12 +31,16 @@ void DDGIStoreProbeRayMiss(RWTexture2DArray<float4> RayData, uint3 coords, DDGIV
     }
 }
 
-void DDGIStoreProbeRayFrontfaceHit(RWTexture2DArray<float4> RayData, uint3 coords, DDGIVolumeDescGPU volume, float3 radiance, float hitT)
+void DDGIStoreProbeRayFrontfaceHit(RWTexture2DArray<float4> RayData, uint3 coords, DDGIVolumeDescGPU volume, float3 radiance, float hitT, float3 normal)
 {
     if (volume.probeRayDataFormat == RTXGI_DDGI_VOLUME_TEXTURE_FORMAT_F32x4)
     {
         // Store color components and hit distance as 32-bit float values.
-        RayData[coords] = float4(radiance, hitT);
+        // RayData[coords] = float4(radiance, hitT);
+
+        static const float c_threshold = 1.f / 255.f;
+        if (RTXGIMaxComponent(radiance.rgb) <= c_threshold) radiance.rgb = float3(0.f, 0.f, 0.f);
+        RayData[coords] = float4(asfloat(RTXGIFloat3ToUint(radiance.rgb)), hitT, asfloat(RTXGIFloat3ToUint(normalize(normal.rgb))), 0.f);
     }
     else if (volume.probeRayDataFormat == RTXGI_DDGI_VOLUME_TEXTURE_FORMAT_F32x2)
     {
@@ -50,7 +56,8 @@ void DDGIStoreProbeRayFrontfaceHit(RWTexture2DArray<float4> RayData, uint3 coord
 {
     if (volume.probeRayDataFormat == RTXGI_DDGI_VOLUME_TEXTURE_FORMAT_F32x4)
     {
-        RayData[coords].w = hitT;
+        // RayData[coords].w = hitT;
+        RayData[coords].g = hitT;
     }
     else if (volume.probeRayDataFormat == RTXGI_DDGI_VOLUME_TEXTURE_FORMAT_F32x2)
     {
@@ -64,7 +71,9 @@ void DDGIStoreProbeRayBackfaceHit(RWTexture2DArray<float4> RayData, uint3 coords
     // Shorten the hit distance on a backface hit by 80% to decrease the influence of the probe during irradiance sampling.
     if (volume.probeRayDataFormat == RTXGI_DDGI_VOLUME_TEXTURE_FORMAT_F32x4)
     {
-        RayData[coords].w = -hitT * 0.2f;
+        // RayData[coords].w = -hitT * 0.2f;
+
+        RayData[coords].g = -hitT * 0.2f;
     }
     else if (volume.probeRayDataFormat == RTXGI_DDGI_VOLUME_TEXTURE_FORMAT_F32x2)
     {
@@ -80,7 +89,9 @@ float3 DDGILoadProbeRayRadiance(RWTexture2DArray<float4> RayData, uint3 coords, 
 {
     if (volume.probeRayDataFormat == RTXGI_DDGI_VOLUME_TEXTURE_FORMAT_F32x4)
     {
-        return RayData[coords].rgb;
+        // return RayData[coords].rgb;
+
+        return RTXGIUintToFloat3(asuint(RayData[coords].r));
     }
     else if (volume.probeRayDataFormat == RTXGI_DDGI_VOLUME_TEXTURE_FORMAT_F32x2)
     {
@@ -93,13 +104,24 @@ float DDGILoadProbeRayDistance(RWTexture2DArray<float4> RayData, uint3 coords, D
 {
     if (volume.probeRayDataFormat == RTXGI_DDGI_VOLUME_TEXTURE_FORMAT_F32x4)
     {
-        return RayData[coords].a;
+        // return RayData[coords].a;
+
+        return RayData[coords].g;
     }
     else if (volume.probeRayDataFormat == RTXGI_DDGI_VOLUME_TEXTURE_FORMAT_F32x2)
     {
         return RayData[coords].g;
     }
     return 0.f;
+}
+
+float3 DDGILoadProbeRayNormal(RWTexture2DArray<float4> RayData, uint3 coords, DDGIVolumeDescGPU volume)
+{
+    if (volume.probeRayDataFormat == RTXGI_DDGI_VOLUME_TEXTURE_FORMAT_F32x4)
+    {
+        return RTXGIUintToFloat3(asuint(RayData[coords].b));
+    }
+    return float3(0.f, 0.f, 0.f); // black
 }
 
 //------------------------------------------------------------------------

@@ -197,5 +197,6 @@ void RayGen()
 
     // Store the final ray radiance and hit distance
     float3 radiance = diffuse + ((min(payload.albedo, float3(maxAlbedo, maxAlbedo, maxAlbedo)) / PI) * irradiance);
-    DDGIStoreProbeRayFrontfaceHit(RayData, outputCoords, volume, radiance, payload.hitT);
+    // Along with the shading point normal
+    DDGIStoreProbeRayFrontfaceHit(RayData, outputCoords, volume, radiance, payload.hitT, payload.normal);
 }

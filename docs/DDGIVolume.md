@@ -244,7 +244,7 @@ The below defines are required for each shader entry point that is compiled.
 
 ```RTXGI_DDGI_RESOURCE_MANAGEMENT [0|1]```
   * Specifies if the application (0: unmanaged) or the SDK (1: managed) own and manage the volume's resources.
-  
+
 ```RTXGI_DDGI_BINDLESS_RESOURCES [0|1]```
   * Specifies resource access mode (0: bound, 1: bindless).
     * ***Note:** bindless resources are **not** compatible with managed resources mode.*
@@ -806,5 +806,4 @@ Below are rules of thumb related to ```DDGIVolume``` configuration and how a vol
   - **Reminder:** ```probeViewBias``` is a world-space offset along the camera view ray applied to the shaded surface point to avoid numerical instabilities when determining visibility.
   - Increasing the ```probeViewBias``` value pushes the shaded point away from the surface and further into the probe's voxel, where the variance of the probe's mean distance values is lower.
   - Since ```probeViewBias``` is a world-space value, scene scale matters! As a result, **the SDK's default value likely won't be what your content requires**.
-
 

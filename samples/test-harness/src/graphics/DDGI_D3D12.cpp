@@ -443,6 +443,7 @@ namespace Graphics
                 volumeDesc.radianceSpread = config.useRadianceSpread;
 
                 volumeDesc.probeRayDataFormat = config.textureFormats.rayDataFormat;
+                // volumeDesc.probeRayDataFormat = rtxgi::EDDGIVolumeTextureFormat::F32x4; // added by ct
                 volumeDesc.probeIrradianceFormat = config.textureFormats.irradianceFormat;
                 volumeDesc.probeDistanceFormat = config.textureFormats.distanceFormat;
                 volumeDesc.probeDataFormat = config.textureFormats.dataFormat;
@@ -621,6 +622,7 @@ namespace Graphics
                 // Describe the DDGIVolume's properties
                 DDGIVolumeDesc& volumeDesc = resources.volumeDescs[volumeConfig.index];
                 GetDDGIVolumeDesc(volumeConfig, volumeDesc);
+
 
                 // Describe the DDGIVolume's resources and shaders
                 DDGIVolumeResources volumeResources;
