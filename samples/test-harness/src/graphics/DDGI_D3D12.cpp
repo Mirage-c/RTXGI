@@ -425,7 +425,7 @@ namespace Graphics
                 volumeDesc.probeSpacing = { config.probeSpacing.x, config.probeSpacing.y, config.probeSpacing.z };
                 volumeDesc.probeCounts = { config.probeCounts.x, config.probeCounts.y, config.probeCounts.z, };
                 volumeDesc.probeNumRays = config.probeNumRays;
-                volumeDesc.probeNumRays = 64;// added by ct: test probeNumRays == 64
+                volumeDesc.probeNumRays = 256;// added by ct: test probeNumRays == 64
                 volumeDesc.probeNumIrradianceTexels = config.probeNumIrradianceTexels;
                 volumeDesc.probeNumIrradianceInteriorTexels = (config.probeNumIrradianceTexels - 2);
                 volumeDesc.probeNumDistanceTexels = config.probeNumDistanceTexels;
@@ -1041,11 +1041,14 @@ namespace Graphics
                     // Get the ray dispatch dimensions
                     volume->GetRayDispatchDimensions(desc.Width, desc.Height, desc.Depth);
 
+                    // BY CT更改：这里应该放在dispatch前面
+                    // Transition the volume's irradiance, distance, and probe data texture arrays from read-only (non-pixel shader) to read-write (UAV)
+                    volume->TransitionResources(d3d.cmdList, EDDGIExecutionStage::POST_PROBE_TRACE);
+
                     // Dispatch the rays
                     d3d.cmdList->DispatchRays(&desc);
 
-                    // Transition the volume's irradiance, distance, and probe data texture arrays from read-only (non-pixel shader) to read-write (UAV)
-                    volume->TransitionResources(d3d.cmdList, EDDGIExecutionStage::POST_PROBE_TRACE);
+                    
 
                     // Barrier(s)
                     barrier.UAV.pResource = volume->GetProbeRayData();
