@@ -11,9 +11,8 @@
 // For example usage, see DDGI_[D3D12|VK].cpp::CompileDDGIVolumeShaders() function.
 
 // -------- CONFIG FILE ---------------------------------------------------------------------------
-#define ONLY_ADJACENT 0
+#define ONLY_ADJACENT 1
 #define CT_SPREAD_PROBE_NUM 1
-#define CT_SPREAD_SEARCH_RADIUS 1
 
 #if RTXGI_DDGI_USE_SHADER_CONFIG_FILE
 #include <DDGIShaderConfig.h>
@@ -199,20 +198,20 @@
                 float3 normal = DDGILoadProbeRayNormal(RayData, rayDataTexCoords, volume);
                 // 可以不处理backface hit，因为会自动舍弃
                 if (length(normal) == 0.f) { // [special] miss
-                    RayRadiance[rayIndex] = DDGILoadProbeRayRadiance(RayData, rayDataTexCoords, volume) / activeProbeNum;
+                    RayRadiance[rayIndex] = DDGILoadProbeRayRadiance(RayData, rayDataTexCoords, volume) / (activeProbeNum + 1.f);
                     RayDistance[rayIndex] = dist;
                     RayDirection[rayIndex] = dir;
                     continue;
                 }
                 float3 shadingPointWorldPos = probeWPos[0] + dir * dist;
-                float pdf_weight = 0.f;
+                float pdf_weight_sum = 0.f;
                 for (int i = 0; i < activeProbeNum; i++) {
                     // calculate dist_adjacent & dir_adjacent.
                     float3 dir_adjacent = normalize(shadingPointWorldPos - probeWPos[i+1]);
                     float dist_adjacent = length(shadingPointWorldPos - probeWPos[i+1]);
-                    pdf_weight += dot(normal, dir_adjacent) / dot(normal, dir) * dist / dist_adjacent * dist / dist_adjacent;
+                    pdf_weight_sum += dot(normal, dir_adjacent) / dot(normal, dir) * dist / dist_adjacent * dist / dist_adjacent;
                 }
-                balanceHeuristics = 1 / (pdf_weight + 1);
+                balanceHeuristics = 1 / (pdf_weight_sum + 1);
             #endif
             // Load the ray radiance and store it in shared memory
             RayRadiance[rayIndex] = DDGILoadProbeRayRadiance(RayData, rayDataTexCoords, volume) * balanceHeuristics;
@@ -396,12 +395,12 @@ void DDGIProbeBlendingCS(
      ***/
     int activeProbeNum = 0;
 #if RTXGI_CT_SPREAD_RADIANCE
-    float4 MISresult = float4(0.f, 0.f, 0.f, 0.f);
+    float4 MISresult = float4(0.f, 0.f, 0.f, 1.f);
     // Get the probe's grid coordinates
     int3 probeCoords = DDGIGetProbeCoords(probeIndices[0], volume);
     probeWorldPos[0] = DDGIGetProbeWorldPosition(probeCoords, volume, ProbeData); // 0: cur probe
     // 选取一个相邻probe
-    int3 testOffset[6] = { int3(1, 0, 0), int3(0, 1, 0), int3(0, 0, 1), int3(-1, 0, 0), int3(0, -1, 0), int3(0, 0, -1) };
+    int3 testOffset[6] = { int3(-1, 0, 0), int3(1, 0, 0), int3(0, 1, 0), int3(0, 0, 1),  int3(0, -1, 0), int3(0, 0, -1) };
     
 
     for (int testIndex = 0; testIndex < 6; testIndex++) {
@@ -466,7 +465,7 @@ void DDGIProbeBlendingCS(
             float misWeight = pdf_weight / (pdf_weight_sum + 1); // balanceHeuristics
     #if ONLY_ADJACENT
             // pdf_weight = 1.f; // biased
-            misWeight = 1.f;
+            misWeight = pdf_weight / pdf_weight_sum;
     #endif
             // Load the ray radiance and store it in shared memory
             RayRadiance[rayIndex] = DDGILoadProbeRayRadiance(RayData, rayDataTexCoords, volume) / pdf_weight * misWeight;
@@ -511,6 +510,7 @@ void DDGIProbeBlendingCS(
         {
                 rayIndex = RTXGI_DDGI_NUM_FIXED_RAYS;
         }
+        float4 adjProbeResult = float4(0.f, 0.f, 0.f, 0.f);
         for (/*rayIndex*/; rayIndex < volume.probeNumRays; rayIndex++)
         {
                 // Backface hit, don't blend this sample
@@ -525,10 +525,10 @@ void DDGIProbeBlendingCS(
                 float cosTheta = max(0.f, dot(probeRayDirection, rayDirection)); // * ChebyshevWeight[rayIndex];
 
                 // Blend the ray's radiance
-                MISresult += float4(radiance * cosTheta, 0.5);
+                adjProbeResult += float4(radiance * cosTheta, 0.5);
         }
-        MISresult.rgb *= 1.f / MISresult.a;
-        MISresult.a = 1.f;
+        adjProbeResult.rgb *= 1.f / adjProbeResult.a;
+        MISresult.rgb += adjProbeResult.rgb;
     }
 #endif // RTXGI_CT_SPREAD_RADIANCE
 
