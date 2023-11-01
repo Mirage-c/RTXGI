@@ -177,7 +177,7 @@
 
     // Cooperatively load the ray radiance and hit distance values into shared memory
     // Cooperatively compute probe ray directions
-    void LoadSharedMemory(int probeIndex, uint GroupIndex, RWTexture2DArray<float4> RayData, DDGIVolumeDescGPU volume, int activeProbeNum, float3 probeWPos[CT_SPREAD_PROBE_NUM+1])
+    void LoadSharedMemory(int probeIndices[CT_SPREAD_PROBE_NUM + 1], uint GroupIndex, RWTexture2DArray<float4> RayData, DDGIVolumeDescGPU volume, int activeProbeNum, float3 probeWPos[CT_SPREAD_PROBE_NUM + 1], RWTexture2DArray<float4> probeDistance)
     {
         
         int totalIterations = int(ceil(float(RTXGI_DDGI_BLEND_RAYS_PER_PROBE) / float(RTXGI_DDGI_PROBE_NUM_TEXELS * RTXGI_DDGI_PROBE_NUM_TEXELS)));
@@ -187,7 +187,7 @@
             if (rayIndex >= RTXGI_DDGI_BLEND_RAYS_PER_PROBE) break;
 
             // Get the coordinates for the probe ray in the RayData texture array
-            uint3 rayDataTexCoords = DDGIGetRayDataTexelCoords(rayIndex, probeIndex, volume);
+            uint3 rayDataTexCoords = DDGIGetRayDataTexelCoords(rayIndex, probeIndices[0], volume);
 
             float dist = DDGILoadProbeRayDistance(RayData, rayDataTexCoords, volume);
             float3 dir = DDGIGetProbeRayDirection(rayIndex, volume);
@@ -208,8 +208,17 @@
                 for (int i = 0; i < activeProbeNum; i++) {
                     // calculate dist_adjacent & dir_adjacent.
                     float3 dir_adjacent = normalize(shadingPointWorldPos - probeWPos[i+1]);
-                    float dist_adjacent = length(shadingPointWorldPos - probeWPos[i+1]);
-                    pdf_weight_sum += dot(normal, dir_adjacent) / dot(normal, dir) * dist / dist_adjacent * dist / dist_adjacent;
+                    float dist_adjacent = length(shadingPointWorldPos - probeWPos[i + 1]);
+
+                    // 计算可见性
+                    float2 octantCoords = DDGIGetOctahedralCoordinates(dir_adjacent);
+                    // Get the texture array coordinates for the octant of the probe
+                    float3 probeTextureUV = DDGIGetProbeUV(probeIndices[i+1], octantCoords, volume.probeNumDistanceInteriorTexels, volume);
+                    // Sample the probe's distance texture to get the mean distance to nearby surfaces
+                    float2 actualDistance = 2.f * probeDistance[probeTextureUV].rg; // TODO: Bilinear Sampler
+                    if (dist_adjacent - 1e-6f < actualDistance.x && actualDistance.x < dist_adjacent + 1e-6f) {
+                        pdf_weight_sum += dot(normal, dir_adjacent) / dot(normal, dir) * dist / dist_adjacent * dist / dist_adjacent;
+                    }
                 }
                 balanceHeuristics = 1 / (pdf_weight_sum + 1);
             #endif
@@ -394,7 +403,12 @@ void DDGIProbeBlendingCS(
      * ADDED BY CT
      ***/
     int activeProbeNum = 0;
+    // Get Distance Texture
+    RWTexture2DArray<float4> probeDistance = RWTex2DArray[resourceIndices.probeDistanceUAVIndex];
+    // TODO: Load to shared memory?
+
 #if RTXGI_CT_SPREAD_RADIANCE
+
     float4 MISresult = float4(0.f, 0.f, 0.f, 1.f);
     // Get the probe's grid coordinates
     int3 probeCoords = DDGIGetProbeCoords(probeIndices[0], volume);
@@ -456,11 +470,31 @@ void DDGIProbeBlendingCS(
             float dist = length(shadingPointWorldPos - probeWorldPos[0]);
             float pdf_weight = dot(normal, dir_adjacent) / dot(normal, dir) * dist / dist_adjacent * dist / dist_adjacent;
 
+            // 计算可见性
+            float2 octantCoords = DDGIGetOctahedralCoordinates(dir);
+            // Get the texture array coordinates for the octant of the probe
+            float3 probeTextureUV = DDGIGetProbeUV(probeIndices[0], octantCoords, volume.probeNumDistanceInteriorTexels, volume);
+            // Sample the probe's distance texture to get the mean distance to nearby surfaces
+            float2 actualDistance = 2.f * probeDistance[probeTextureUV].rg; // TODO: Bilinear Sampler
+            if (dist_adjacent - 1e-6f > actualDistance.x || actualDistance.x > dist_adjacent + 1e-6f) {
+                RayRadiance[rayIndex] = 0;
+                continue;
+            }
+
             float pdf_weight_sum = 0.f;
             for (int p = 0; p < activeProbeNum; p++) {
                 float3 dir_adjacent = normalize(shadingPointWorldPos - probeWorldPos[p + 1]);
                 float dist_adjacent = length(shadingPointWorldPos - probeWorldPos[p + 1]);
-                pdf_weight_sum += dot(normal, dir_adjacent) / dot(normal, dir) * dist / dist_adjacent * dist / dist_adjacent;
+
+                // 计算可见性
+                float2 octantCoords = DDGIGetOctahedralCoordinates(dir_adjacent);
+                // Get the texture array coordinates for the octant of the probe
+                float3 probeTextureUV = DDGIGetProbeUV(probeIndices[p+1], octantCoords, volume.probeNumDistanceInteriorTexels, volume);
+                // Sample the probe's distance texture to get the mean distance to nearby surfaces
+                float2 actualDistance = 2.f * probeDistance[probeTextureUV].rg; // TODO: Bilinear Sampler
+                if (dist_adjacent - 1e-6f < actualDistance.x && actualDistance.x < dist_adjacent + 1e-6f)  // visible
+                    pdf_weight_sum += dot(normal, dir_adjacent) / dot(normal, dir) * dist / dist_adjacent * dist / dist_adjacent;
+                
             }
             float misWeight = pdf_weight / (pdf_weight_sum + 1); // balanceHeuristics
     #if ONLY_ADJACENT
@@ -534,7 +568,7 @@ void DDGIProbeBlendingCS(
 
 #if RTXGI_DDGI_BLEND_SHARED_MEMORY
     // Cooperatively load the ray radiance and hit distance values into shared memory and cooperatively compute probe ray directions
-    LoadSharedMemory(probeIndices[0], GroupIndex, RayData, volume, activeProbeNum, probeWorldPos);
+    LoadSharedMemory(probeIndices, GroupIndex, RayData, volume, activeProbeNum, probeWorldPos, probeDistance);
 #endif // RTXGI_DDGI_BLEND_SHARED_MEMORY
 
     if(!isBorderTexel)
