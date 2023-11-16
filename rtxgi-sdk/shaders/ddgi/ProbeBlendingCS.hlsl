@@ -210,7 +210,7 @@
                     float3 dir_adjacent = normalize(shadingPointWorldPos - probeWPos[i+1]);
                     float dist_adjacent = length(shadingPointWorldPos - probeWPos[i + 1]);
 
-                    /*
+                    /*[Visibility]
                     // 计算可见性
                     float2 octantCoords = DDGIGetOctahedralCoordinates(dir_adjacent);
                     // Get the texture array coordinates for the octant of the probe
@@ -475,7 +475,7 @@ void DDGIProbeBlendingCS(
             float dist = length(shadingPointWorldPos - probeWorldPos[0]);
             float pdf_weight = dot(normal, dir_adjacent) / dot(normal, dir) * dist / dist_adjacent * dist / dist_adjacent;
 
-            /*
+            /*[Visibility]
             // 计算可见性
             float2 octantCoords = DDGIGetOctahedralCoordinates(dir);
             // Get the texture array coordinates for the octant of the probe
@@ -492,7 +492,7 @@ void DDGIProbeBlendingCS(
             for (int p = 0; p < activeProbeNum; p++) {
                 float3 dir_adjacent = normalize(shadingPointWorldPos - probeWorldPos[p + 1]);
                 float dist_adjacent = length(shadingPointWorldPos - probeWorldPos[p + 1]);
-                /*
+                /*[Visibility]
                 // 计算可见性
                 float2 octantCoords = DDGIGetOctahedralCoordinates(dir_adjacent);
                 // Get the texture array coordinates for the octant of the probe
