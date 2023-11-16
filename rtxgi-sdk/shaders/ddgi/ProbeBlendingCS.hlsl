@@ -11,7 +11,7 @@
 // For example usage, see DDGI_[D3D12|VK].cpp::CompileDDGIVolumeShaders() function.
 
 // -------- CONFIG FILE ---------------------------------------------------------------------------
-#define ONLY_ADJACENT 1
+#define ONLY_ADJACENT 0
 #define CT_SPREAD_PROBE_NUM 1
 
 #if RTXGI_DDGI_USE_SHADER_CONFIG_FILE
@@ -209,7 +209,9 @@
                     // calculate dist_adjacent & dir_adjacent.
                     float3 dir_adjacent = normalize(shadingPointWorldPos - probeWPos[i+1]);
                     float dist_adjacent = length(shadingPointWorldPos - probeWPos[i + 1]);
-
+                    if (!(dot(normal, dir_adjacent) / dot(normal, dir) >= 0.f)) { // not visible
+                        continue;
+                    }
                     /*[Visibility]
                     // 计算可见性
                     float2 octantCoords = DDGIGetOctahedralCoordinates(dir_adjacent);
@@ -473,8 +475,13 @@ void DDGIProbeBlendingCS(
             float3 shadingPointWorldPos = probeWorldPos[i + 1] + dir_adjacent * dist_adjacent;
             float3 dir = normalize(shadingPointWorldPos - probeWorldPos[0]);
             float dist = length(shadingPointWorldPos - probeWorldPos[0]);
-            float pdf_weight = dot(normal, dir_adjacent) / dot(normal, dir) * dist / dist_adjacent * dist / dist_adjacent;
 
+            float pdf_weight = dot(normal, dir_adjacent) / dot(normal, dir) * dist / dist_adjacent * dist / dist_adjacent;
+            if (!(dot(normal, dir_adjacent) / dot(normal, dir) >= 0.f)) { // not visible
+                RayRadiance[rayIndex] = float3(0.f, 0.f, 0.f);
+                RayDistance[rayIndex] = dist;
+                continue;
+            }
             /*[Visibility]
             // 计算可见性
             float2 octantCoords = DDGIGetOctahedralCoordinates(dir);
@@ -492,6 +499,11 @@ void DDGIProbeBlendingCS(
             for (int p = 0; p < activeProbeNum; p++) {
                 float3 dir_adjacent = normalize(shadingPointWorldPos - probeWorldPos[p + 1]);
                 float dist_adjacent = length(shadingPointWorldPos - probeWorldPos[p + 1]);
+
+                if (!(dot(normal, dir_adjacent) / dot(normal, dir) >= 0.f)) { // not visible
+                    continue;
+                }
+
                 /*[Visibility]
                 // 计算可见性
                 float2 octantCoords = DDGIGetOctahedralCoordinates(dir_adjacent);
