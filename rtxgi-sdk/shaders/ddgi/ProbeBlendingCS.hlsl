@@ -210,15 +210,16 @@
                     float3 dir_adjacent = normalize(shadingPointWorldPos - probeWPos[i+1]);
                     float dist_adjacent = length(shadingPointWorldPos - probeWPos[i + 1]);
 
+                    /*
                     // 计算可见性
                     float2 octantCoords = DDGIGetOctahedralCoordinates(dir_adjacent);
                     // Get the texture array coordinates for the octant of the probe
                     float3 probeTextureUV = DDGIGetProbeUV(probeIndices[i+1], octantCoords, volume.probeNumDistanceInteriorTexels, volume);
                     // Sample the probe's distance texture to get the mean distance to nearby surfaces
                     float2 actualDistance = 2.f * probeDistance[probeTextureUV].rg; // TODO: Bilinear Sampler
-                    if (dist_adjacent - 1e-6f < actualDistance.x && actualDistance.x < dist_adjacent + 1e-6f) {
+                    if (dist_adjacent - 1e-6f < actualDistance.x && actualDistance.x < dist_adjacent + 1e-6f)
+                    */
                         pdf_weight_sum += dot(normal, dir_adjacent) / dot(normal, dir) * dist / dist_adjacent * dist / dist_adjacent;
-                    }
                 }
                 balanceHeuristics = 1 / (pdf_weight_sum + 1);
             #endif
@@ -458,7 +459,11 @@ void DDGIProbeBlendingCS(
             float3 normal = DDGILoadProbeRayNormal(RayData, rayDataTexCoords, volume);
             if (length(normal) == 0.f) { // [special] miss
                 // 均衡而不是balance
+#if ONLY_ADJACENT
+                RayRadiance[rayIndex] = DDGILoadProbeRayRadiance(RayData, rayDataTexCoords, volume) / activeProbeNum;
+#else
                 RayRadiance[rayIndex] = DDGILoadProbeRayRadiance(RayData, rayDataTexCoords, volume) / (activeProbeNum + 1.f);
+#endif
                 RayDirection[rayIndex] = dir_adjacent; // 1e27
                 RayDistance[rayIndex] = dist_adjacent;
                 continue;
@@ -470,6 +475,7 @@ void DDGIProbeBlendingCS(
             float dist = length(shadingPointWorldPos - probeWorldPos[0]);
             float pdf_weight = dot(normal, dir_adjacent) / dot(normal, dir) * dist / dist_adjacent * dist / dist_adjacent;
 
+            /*
             // 计算可见性
             float2 octantCoords = DDGIGetOctahedralCoordinates(dir);
             // Get the texture array coordinates for the octant of the probe
@@ -480,12 +486,13 @@ void DDGIProbeBlendingCS(
                 RayRadiance[rayIndex] = 0;
                 continue;
             }
+            */
 
             float pdf_weight_sum = 0.f;
             for (int p = 0; p < activeProbeNum; p++) {
                 float3 dir_adjacent = normalize(shadingPointWorldPos - probeWorldPos[p + 1]);
                 float dist_adjacent = length(shadingPointWorldPos - probeWorldPos[p + 1]);
-
+                /*
                 // 计算可见性
                 float2 octantCoords = DDGIGetOctahedralCoordinates(dir_adjacent);
                 // Get the texture array coordinates for the octant of the probe
@@ -493,6 +500,7 @@ void DDGIProbeBlendingCS(
                 // Sample the probe's distance texture to get the mean distance to nearby surfaces
                 float2 actualDistance = 2.f * probeDistance[probeTextureUV].rg; // TODO: Bilinear Sampler
                 if (dist_adjacent - 1e-6f < actualDistance.x && actualDistance.x < dist_adjacent + 1e-6f)  // visible
+                */
                     pdf_weight_sum += dot(normal, dir_adjacent) / dot(normal, dir) * dist / dist_adjacent * dist / dist_adjacent;
                 
             }
