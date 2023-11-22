@@ -713,7 +713,7 @@ void DDGIProbeBlendingCS(
             #endif // RTXGI_DDGI_BLEND_SHARED_MEMORY
 
             // Filter the ray hit distance
-            result += float4(probeRayDistance * cosTheta, (probeRayDistance * probeRayDistance) * cosTheta, 0.f, 0.5f);
+            result += float4(probeRayDistance * cosTheta, (probeRayDistance * probeRayDistance) * cosTheta, 0.f, cosTheta);
 
         #endif // RTXGI_DDGI_BLEND_RADIANCE
         }
