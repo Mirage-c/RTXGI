@@ -692,8 +692,8 @@ void DDGIProbeBlendingCS(
 
             // Blend the ray's radiance
             result += float4(probeRayRadiance * cosTheta, cosTheta);
-            // if (weight != 0.f)  
-            //     result += float4(probeRayRadiance * weight, 0.5f); 
+            // if (cosTheta != 0.f)  
+            //     result += float4(probeRayRadiance * cosTheta, 0.5f); 
 
         #else // RTXGI_DDGI_BLEND_RADIANCE == 0
 
@@ -714,6 +714,8 @@ void DDGIProbeBlendingCS(
 
             // Filter the ray hit distance
             result += float4(probeRayDistance * cosTheta, (probeRayDistance * probeRayDistance) * cosTheta, 0.f, cosTheta);
+            // if(cosTheta != 0.f)
+            //     result += float4(probeRayDistance * cosTheta, (probeRayDistance * probeRayDistance) * cosTheta, 0.f, 0.5f);
 
         #endif // RTXGI_DDGI_BLEND_RADIANCE
         }

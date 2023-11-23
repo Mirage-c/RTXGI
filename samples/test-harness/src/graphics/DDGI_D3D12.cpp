@@ -425,7 +425,6 @@ namespace Graphics
                 volumeDesc.probeSpacing = { config.probeSpacing.x, config.probeSpacing.y, config.probeSpacing.z };
                 volumeDesc.probeCounts = { config.probeCounts.x, config.probeCounts.y, config.probeCounts.z, };
                 volumeDesc.probeNumRays = config.probeNumRays;
-                volumeDesc.probeNumRays = 256;// added by ct: test probeNumRays == 64
                 volumeDesc.probeNumIrradianceTexels = config.probeNumIrradianceTexels;
                 volumeDesc.probeNumIrradianceInteriorTexels = (config.probeNumIrradianceTexels - 2);
                 volumeDesc.probeNumDistanceTexels = config.probeNumDistanceTexels;
