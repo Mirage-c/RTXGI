@@ -11,8 +11,9 @@
 // For example usage, see DDGI_[D3D12|VK].cpp::CompileDDGIVolumeShaders() function.
 
 // -------- CONFIG FILE ---------------------------------------------------------------------------
-#define ONLY_ADJACENT 0
-#define CT_SPREAD_PROBE_NUM 1
+#define ONLY_ADJACENT 1
+#define CT_SPREAD_PROBE_NUM 6
+#define CT_TRUNCATION 1
 
 #if RTXGI_DDGI_USE_SHADER_CONFIG_FILE
 #include <DDGIShaderConfig.h>
@@ -417,7 +418,7 @@ void DDGIProbeBlendingCS(
     int3 probeCoords = DDGIGetProbeCoords(probeIndices[0], volume);
     probeWorldPos[0] = DDGIGetProbeWorldPosition(probeCoords, volume, ProbeData); // 0: cur probe
     // 选取一个相邻probe
-    int3 testOffset[6] = { int3(-1, 0, 0), int3(1, 0, 0), int3(0, 1, 0), int3(0, 0, 1),  int3(0, -1, 0), int3(0, 0, -1) };
+    int3 testOffset[6] = { int3(-1, 0, 0), int3(1, 0, 0), int3(0, -1, 0), int3(0, 1, 0), int3(0, 0, 1),int3(0, 0, -1) };
     
 
     for (int testIndex = 0; testIndex < 6; testIndex++) {
@@ -482,18 +483,18 @@ void DDGIProbeBlendingCS(
                 RayDistance[rayIndex] = dist;
                 continue;
             }
-            /*[Visibility]
+            //[Visibility]
             // 计算可见性
-            float2 octantCoords = DDGIGetOctahedralCoordinates(dir);
-            // Get the texture array coordinates for the octant of the probe
-            float3 probeTextureUV = DDGIGetProbeUV(probeIndices[0], octantCoords, volume.probeNumDistanceInteriorTexels, volume);
-            // Sample the probe's distance texture to get the mean distance to nearby surfaces
-            float2 actualDistance = 2.f * probeDistance[probeTextureUV].rg; // TODO: Bilinear Sampler
-            if (dist_adjacent - 1e-6f > actualDistance.x || actualDistance.x > dist_adjacent + 1e-6f) {
-                RayRadiance[rayIndex] = 0;
-                continue;
-            }
-            */
+            // float2 octantCoords = DDGIGetOctahedralCoordinates(dir);
+            // // Get the texture array coordinates for the octant of the probe
+            // float3 probeTextureUV = DDGIGetProbeUV(probeIndices[0], octantCoords, volume.probeNumDistanceInteriorTexels, volume);
+            // // Sample the probe's distance texture to get the mean distance to nearby surfaces
+            // float2 actualDistance = 2.f * probeDistance[probeTextureUV].rg; // TODO: Bilinear Sampler
+            // if (dist_adjacent - 1e-6f > actualDistance.x || actualDistance.x > dist_adjacent + 1e-6f) {
+            //     RayRadiance[rayIndex] = 0;
+            //     continue;
+            // }
+            
 
             float pdf_weight_sum = 0.f;
             for (int p = 0; p < activeProbeNum; p++) {
@@ -699,18 +700,23 @@ void DDGIProbeBlendingCS(
 
             // Initialize the max probe hit distance to 50% larger the maximum distance between probe grid cells
             float probeMaxRayDistance = length(volume.probeSpacing) * 1.5f;
-
             // Increase or decrease the filtered distance value's "sharpness"
             cosTheta = pow(cosTheta, volume.probeDistanceExponent);
 
+            #if CT_TRUNCATION
+            probeMaxRayDistance = length(volume.probeSpacing) * 20.f;
+            // ADDED BY CT : cos truncation
+            if (cosTheta < 0.005f)
+                cosTheta = 0.f;
+            #endif
             // Load the ray traced distance
             // Hit distance is negative on backface hits (for probe relocation), so take the absolute value of the loaded data
             float probeRayDistance = 0.f;
-            #if RTXGI_DDGI_BLEND_SHARED_MEMORY
+        #if RTXGI_DDGI_BLEND_SHARED_MEMORY
             probeRayDistance = min(abs(RayDistance[rayIndex]), probeMaxRayDistance);
-            #else
+        #else
             probeRayDistance = min(abs(DDGILoadProbeRayDistance(RayData, rayDataTexCoords, volume)), probeMaxRayDistance);
-            #endif // RTXGI_DDGI_BLEND_SHARED_MEMORY
+        #endif // RTXGI_DDGI_BLEND_SHARED_MEMORY
 
             // Filter the ray hit distance
             result += float4(probeRayDistance * cosTheta, (probeRayDistance * probeRayDistance) * cosTheta, 0.f, cosTheta);
