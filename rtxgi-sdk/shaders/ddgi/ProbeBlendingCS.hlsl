@@ -176,6 +176,33 @@
 
 #if RTXGI_DDGI_BLEND_SHARED_MEMORY
 
+    float GetChebyshevWeight(DDGIVolumeDescGPU volume, RWTexture2DArray<float4> probeDistance, int probeIndex, float3 dir, float dist) {
+        // Compute the octahedral coordinates of the adjacent probe
+        float2 octantCoords = DDGIGetOctahedralCoordinates(dir);
+
+        // Get the texture atlas coordinates for the octant of the probe
+        float3 probeTextureUV = DDGIGetProbeUV(probeIndex, octantCoords, volume.probeNumDistanceInteriorTexels, volume);
+
+        // Sample the probe's distance texture to get the mean distance to nearby surfaces
+        float2 filteredDistance = probeDistance[probeTextureUV].rg;
+
+        // Find the variance of the mean distance
+        float variance = abs((filteredDistance.x * filteredDistance.x) - filteredDistance.y);
+
+        // Occlusion test
+        float chebyshevWeight = 1.f;
+        if (dist > filteredDistance.x) // occluded
+        {
+            // v must be greater than 0, which is guaranteed by the if condition above.
+            float v = dist - filteredDistance.x;
+            chebyshevWeight = variance / (variance + (v * v));
+
+            // Increase the contrast in the weight
+            chebyshevWeight = max((chebyshevWeight * chebyshevWeight * chebyshevWeight), 0.05f);
+        }
+        return chebyshevWeight;
+    }
+
     // Cooperatively load the ray radiance and hit distance values into shared memory
     // Cooperatively compute probe ray directions
     void LoadSharedMemory(int probeIndices[CT_SPREAD_PROBE_NUM + 1], uint GroupIndex, RWTexture2DArray<float4> RayData, DDGIVolumeDescGPU volume, int activeProbeNum, float3 probeWPos[CT_SPREAD_PROBE_NUM + 1], RWTexture2DArray<float4> probeDistance)
@@ -195,8 +222,9 @@
         #if RTXGI_DDGI_BLEND_RADIANCE
             float balanceHeuristics = 1.f;
             #if RTXGI_CT_SPREAD_RADIANCE
-                // Load the shading point normal and compute p2.
+            // Load the shading point normal and compute p2.
                 float3 normal = DDGILoadProbeRayNormal(RayData, rayDataTexCoords, volume);
+                float chebyshevWeight_0 = GetChebyshevWeight(volume, probeDistance, probeIndices[0], dir, dist);
                 // 可以不处理backface hit，因为会自动舍弃
                 if (length(normal) == 0.f) { // [special] miss
                     RayRadiance[rayIndex] = DDGILoadProbeRayRadiance(RayData, rayDataTexCoords, volume) / (activeProbeNum + 1.f);
@@ -208,23 +236,16 @@
                 float pdf_weight_sum = 0.f;
                 for (int i = 0; i < activeProbeNum; i++) {
                     // calculate dist_adjacent & dir_adjacent.
-                    float3 dir_adjacent = normalize(shadingPointWorldPos - probeWPos[i+1]);
+                    float3 dir_adjacent = normalize(shadingPointWorldPos - probeWPos[i + 1]);
                     float dist_adjacent = length(shadingPointWorldPos - probeWPos[i + 1]);
                     if (!(dot(normal, dir_adjacent) / dot(normal, dir) >= 0.f)) { // not visible
                         continue;
                     }
-                    /*[Visibility]
-                    // 计算可见性
-                    float2 octantCoords = DDGIGetOctahedralCoordinates(dir_adjacent);
-                    // Get the texture array coordinates for the octant of the probe
-                    float3 probeTextureUV = DDGIGetProbeUV(probeIndices[i+1], octantCoords, volume.probeNumDistanceInteriorTexels, volume);
-                    // Sample the probe's distance texture to get the mean distance to nearby surfaces
-                    float2 actualDistance = 2.f * probeDistance[probeTextureUV].rg; // TODO: Bilinear Sampler
-                    if (dist_adjacent - 1e-6f < actualDistance.x && actualDistance.x < dist_adjacent + 1e-6f)
-                    */
-                        pdf_weight_sum += dot(normal, dir_adjacent) / dot(normal, dir) * dist / dist_adjacent * dist / dist_adjacent;
+                    float chebyshevWeight = GetChebyshevWeight(volume, probeDistance, probeIndices[i + 1], dir_adjacent, dist_adjacent);
+                    pdf_weight_sum += dot(normal, dir_adjacent) / dot(normal, dir) *
+                                      dist / dist_adjacent * dist / dist_adjacent * chebyshevWeight;
                 }
-                balanceHeuristics = 1 / (pdf_weight_sum + 1);
+                balanceHeuristics = chebyshevWeight_0 / (pdf_weight_sum + chebyshevWeight_0);
             #endif
             // Load the ray radiance and store it in shared memory
             RayRadiance[rayIndex] = DDGILoadProbeRayRadiance(RayData, rayDataTexCoords, volume) * balanceHeuristics;
@@ -478,81 +499,39 @@ void DDGIProbeBlendingCS(
             float dist = length(shadingPointWorldPos - probeWorldPos[0]);
 
             float pdf_weight = dot(normal, dir_adjacent) / dot(normal, dir) * dist / dist_adjacent * dist / dist_adjacent;
+            float chebyshevWeight = GetChebyshevWeight(volume, probeDistance, probeIndices[i + 1], dir, dist);
+            float chebyshevWeight_0 = GetChebyshevWeight(volume, probeDistance, probeIndices[0], dir, dist);
+
             if (!(dot(normal, dir_adjacent) / dot(normal, dir) >= 0.f)) { // not visible
                 RayRadiance[rayIndex] = float3(0.f, 0.f, 0.f);
                 RayDistance[rayIndex] = dist;
                 continue;
             }
-            //[Visibility]
-            // 计算可见性
-            // float2 octantCoords = DDGIGetOctahedralCoordinates(dir);
-            // // Get the texture array coordinates for the octant of the probe
-            // float3 probeTextureUV = DDGIGetProbeUV(probeIndices[0], octantCoords, volume.probeNumDistanceInteriorTexels, volume);
-            // // Sample the probe's distance texture to get the mean distance to nearby surfaces
-            // float2 actualDistance = 2.f * probeDistance[probeTextureUV].rg; // TODO: Bilinear Sampler
-            // if (dist_adjacent - 1e-6f > actualDistance.x || actualDistance.x > dist_adjacent + 1e-6f) {
-            //     RayRadiance[rayIndex] = 0;
-            //     continue;
-            // }
-            
 
             float pdf_weight_sum = 0.f;
             for (int p = 0; p < activeProbeNum; p++) {
                 float3 dir_adjacent = normalize(shadingPointWorldPos - probeWorldPos[p + 1]);
                 float dist_adjacent = length(shadingPointWorldPos - probeWorldPos[p + 1]);
 
+                float chebyshevWeight_adjacent = GetChebyshevWeight(volume, probeDistance, probeIndices[p + 1], dir_adjacent, dist_adjacent);
                 if (!(dot(normal, dir_adjacent) / dot(normal, dir) >= 0.f)) { // not visible
                     continue;
                 }
 
-                /*[Visibility]
-                // 计算可见性
-                float2 octantCoords = DDGIGetOctahedralCoordinates(dir_adjacent);
-                // Get the texture array coordinates for the octant of the probe
-                float3 probeTextureUV = DDGIGetProbeUV(probeIndices[p+1], octantCoords, volume.probeNumDistanceInteriorTexels, volume);
-                // Sample the probe's distance texture to get the mean distance to nearby surfaces
-                float2 actualDistance = 2.f * probeDistance[probeTextureUV].rg; // TODO: Bilinear Sampler
-                if (dist_adjacent - 1e-6f < actualDistance.x && actualDistance.x < dist_adjacent + 1e-6f)  // visible
-                */
-                    pdf_weight_sum += dot(normal, dir_adjacent) / dot(normal, dir) * dist / dist_adjacent * dist / dist_adjacent;
-                
+                pdf_weight_sum += dot(normal, dir_adjacent) / dot(normal, dir) 
+                                    * dist / dist_adjacent * dist / dist_adjacent 
+                                    * chebyshevWeight_adjacent;
             }
-            float misWeight = pdf_weight / (pdf_weight_sum + 1); // balanceHeuristics
+            float misWeight = pdf_weight * chebyshevWeight / (pdf_weight_sum + chebyshevWeight_0); // balanceHeuristics
     #if ONLY_ADJACENT
             // pdf_weight = 1.f; // biased
             misWeight = pdf_weight / pdf_weight_sum;
     #endif
             // Load the ray radiance and store it in shared memory
-            RayRadiance[rayIndex] = DDGILoadProbeRayRadiance(RayData, rayDataTexCoords, volume) / pdf_weight * misWeight;
+            RayRadiance[rayIndex] = DDGILoadProbeRayRadiance(RayData, rayDataTexCoords, volume) * chebyshevWeight_0 
+                                        / pdf_weight * misWeight;
             RayDirection[rayIndex] = dir;
             RayDistance[rayIndex] = dist;
-
-            /*{
-                // Compute the octahedral coordinates of the adjacent probe
-                float2 octantCoords = DDGIGetOctahedralCoordinates(dir);
-
-                // Get the texture atlas coordinates for the octant of the probe
-                float2 probeTextureUV = DDGIGetProbeUV(adjacentProbeIndex, octantCoords, volume.probeNumDistanceTexels, volume);
-
-                // Sample the probe's distance texture to get the mean distance to nearby surfaces
-                float2 filteredDistance = Dist[probeTextureUV].rg;
-
-                // Find the variance of the mean distance
-                float variance = abs((filteredDistance.x * filteredDistance.x) - filteredDistance.y);
-
-                // Occlusion test
-                float chebyshevWeight = 1.f;
-                if (dist > filteredDistance.x) // occluded
-                {
-                    // v must be greater than 0, which is guaranteed by the if condition above.
-                    float v = dist - filteredDistance.x;
-                    chebyshevWeight = variance / (variance + (v * v));
-
-                    // Increase the contrast in the weight
-                    chebyshevWeight = max((chebyshevWeight * chebyshevWeight * chebyshevWeight), 0.f);
-                }
-                ChebyshevWeight[rayIndex] = chebyshevWeight;
-            }*/
         }
 
         // Wait for all threads in the group to finish their shared memory operations
