@@ -88,6 +88,7 @@ namespace rtxgi
         bool            showProbes = false;                     // A flag for toggling probe visualizations for this volume
         bool            insertPerfMarkers = false;              // A flag for toggling volume-specific perf markers in the graphics command list (for debugging and tools)
         bool            radianceSpread = false;
+        bool            RS_visibilityTest = false;
 
         float3          origin = {};                            // World-space origin of the volume
         float3          eulerAngles = {};                       // Euler rotation angles XYZ (in radians)
@@ -253,6 +254,8 @@ namespace rtxgi
         void SetInsertPerfMarkers(bool value) { m_desc.insertPerfMarkers = value; }
 
         void SetRadianceSpread(bool value) { m_desc.radianceSpread = value; }
+
+        void SetVisibilityTest(bool value) { m_desc.RS_visibilityTest = value; }
 
         void SetMovementType(EDDGIVolumeMovementType value);
 

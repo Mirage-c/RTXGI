@@ -831,6 +831,15 @@ namespace Graphics
                         config.ddgi.volumes[config.ddgi.selectedVolume].clearProbes = 1;
                         volumeChanged[config.ddgi.selectedVolume] = true;
                     }
+                    if (config.ddgi.volumes[config.ddgi.selectedVolume].useRadianceSpread) {
+                        if (ImGui::Checkbox("RS Visibility Test", &config.ddgi.volumes[config.ddgi.selectedVolume].useRS_visibilityTest)) {
+                            volume->SetVisibilityTest(config.ddgi.volumes[config.ddgi.selectedVolume].useRS_visibilityTest);
+                            config.ddgi.reload = true;
+                            // clear probes
+                            config.ddgi.volumes[config.ddgi.selectedVolume].clearProbes = 1;
+                            volumeChanged[config.ddgi.selectedVolume] = true;
+                        }
+                    }
                     ImGui::SameLine(); AddQuestionMark("Spread the radiance to the adjacent probes.");
 
                     {

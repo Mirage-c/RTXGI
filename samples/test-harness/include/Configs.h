@@ -47,6 +47,7 @@ namespace Configs
         bool               clearProbeVariability = false;
         // added by ct
         bool               useRadianceSpread = false;
+        bool               useRS_visibilityTest = false;
 
         DirectX::XMFLOAT3  origin = { 0.f, 0.f, 0.f };
         DirectX::XMFLOAT3  eulerAngles = { 0.f, 0.f, 0.f };

@@ -440,6 +440,7 @@ namespace Graphics
                 volumeDesc.probeVisType = config.probeVisType;
                 // added by ct
                 volumeDesc.radianceSpread = config.useRadianceSpread;
+                volumeDesc.RS_visibilityTest = config.useRS_visibilityTest;
 
                 volumeDesc.probeRayDataFormat = config.textureFormats.rayDataFormat;
                 // volumeDesc.probeRayDataFormat = rtxgi::EDDGIVolumeTextureFormat::F32x4; // added by ct
