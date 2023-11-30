@@ -235,6 +235,31 @@ float3 DDGIGetProbeUV(int probeIndex, float2 octantCoordinates, int numProbeInte
     return float3(uv, coords.z);
 }
 
+float3 DDGIGetProbeXY(int probeIndex, float2 octantCoordinates, int numProbeInteriorTexels, DDGIVolumeDescGPU volume)
+{
+    // Get the probe's texel coordinates, assuming one texel per probe
+    uint3 coords = DDGIGetProbeTexelCoords(probeIndex, volume);
+
+    // Add the border texels to get the total texels per probe
+    float numProbeTexels = (numProbeInteriorTexels + 2.f);
+
+#if RTXGI_COORDINATE_SYSTEM == RTXGI_COORDINATE_SYSTEM_LEFT || RTXGI_COORDINATE_SYSTEM == RTXGI_COORDINATE_SYSTEM_RIGHT
+    float textureWidth = numProbeTexels * volume.probeCounts.x;
+    float textureHeight = numProbeTexels * volume.probeCounts.z;
+#elif RTXGI_COORDINATE_SYSTEM == RTXGI_COORDINATE_SYSTEM_LEFT_Z_UP
+    float textureWidth = numProbeTexels * volume.probeCounts.y;
+    float textureHeight = numProbeTexels * volume.probeCounts.x;
+#elif RTXGI_COORDINATE_SYSTEM == RTXGI_COORDINATE_SYSTEM_RIGHT_Z_UP
+    float textureWidth = numProbeTexels * volume.probeCounts.x;
+    float textureHeight = numProbeTexels * volume.probeCounts.y;
+#endif
+
+    // Move to the center of the probe and move to the octant texel before normalizing
+    float2 uv = float2(coords.x * numProbeTexels, coords.y * numProbeTexels) + (numProbeTexels * 0.5f);
+    uv += octantCoordinates.xy * ((float)numProbeInteriorTexels * 0.5f);
+    return float3(uv, coords.z);
+}
+
 //------------------------------------------------------------------------
 // Probe Classification
 //------------------------------------------------------------------------

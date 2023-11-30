@@ -83,7 +83,6 @@
         // DDGIVolume ray data, probe irradiance, probe distance, and probe data
         RTXGI_VK_BINDING(RWTEX2DARRAY_REGISTER, RWTEX2DARRAY_SPACE)
         RWTexture2DArray<float4> RWTex2DArray[] RWTEX2DARRAY_REG_DECL;
-
     #endif
 
 #else
@@ -176,18 +175,35 @@
 
 #if RTXGI_DDGI_BLEND_SHARED_MEMORY
 
+    // 手动双线性插值函数
+    float4 SampleBilinear(RWTexture2DArray<float4> tex, float3 texCoord){
+        float2 fracValue = frac(texCoord.xy); // 获取小数部分作为插值系数
+        int2 baseCoord = texCoord.xy;             // 基础坐标
+
+        // 获取邻近四个像素的值
+        float4 p00 = tex[int3(baseCoord, texCoord.z)];
+        float4 p10 = tex[int3(baseCoord + int2(1, 0), texCoord.z)];
+        float4 p01 = tex[int3(baseCoord + int2(0, 1), texCoord.z)];
+        float4 p11 = tex[int3(baseCoord + int2(1, 1), texCoord.z)];
+
+        // 进行双线性插值
+        float4 interp1 = lerp(p00, p10, fracValue.x);
+        float4 interp2 = lerp(p01, p11, fracValue.x);
+        return lerp(interp1, interp2, fracValue.y);
+    }
+
     float GetChebyshevWeight(DDGIVolumeDescGPU volume, RWTexture2DArray<float4> probeDistance, int probeIndex, float3 dir, float dist) {
         // Compute the octahedral coordinates of the adjacent probe
         float2 octantCoords = DDGIGetOctahedralCoordinates(dir);
 
         // Get the texture atlas coordinates for the octant of the probe
-        float3 probeTextureUV = DDGIGetProbeUV(probeIndex, octantCoords, volume.probeNumDistanceInteriorTexels, volume);
+        float3 probeTextureXY = DDGIGetProbeXY(probeIndex, octantCoords, volume.probeNumDistanceInteriorTexels, volume);
 
         // Sample the probe's distance texture to get the mean distance to nearby surfaces
-        float2 filteredDistance = probeDistance[probeTextureUV].rg;
+        float2 filteredDistance = 2.f * SampleBilinear(probeDistance, probeTextureXY).rg;
 
         // Find the variance of the mean distance
-        float variance = abs((filteredDistance.x * filteredDistance.x) - filteredDistance.y);
+        float variance = abs(filteredDistance.y - (filteredDistance.x * filteredDistance.x));
 
         // Occlusion test
         float chebyshevWeight = 1.f;
@@ -198,7 +214,7 @@
             chebyshevWeight = variance / (variance + (v * v));
 
             // Increase the contrast in the weight
-            chebyshevWeight = max((chebyshevWeight * chebyshevWeight * chebyshevWeight), 0.05f);
+            chebyshevWeight = max((chebyshevWeight * chebyshevWeight * chebyshevWeight), 0.f);
         }
         return chebyshevWeight;
     }
@@ -519,8 +535,8 @@ void DDGIProbeBlendingCS(
                 }
 
                 pdf_weight_sum += dot(normal, dir_adjacent) / dot(normal, dir) 
-                                    * dist / dist_adjacent * dist / dist_adjacent 
-                                    * chebyshevWeight_adjacent;
+                                    * chebyshevWeight_adjacent
+                                    * dist / dist_adjacent * dist / dist_adjacent;
             }
             float misWeight = pdf_weight * chebyshevWeight / (pdf_weight_sum + chebyshevWeight_0); // balanceHeuristics
     #if ONLY_ADJACENT
