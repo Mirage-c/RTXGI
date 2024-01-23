@@ -207,6 +207,7 @@
 
         // Occlusion test
         float chebyshevWeight = 1.f;
+#if RTXGI_CT_VISIBILITY_TEST
         if (dist > filteredDistance.x) // occluded
         {
             // v must be greater than 0, which is guaranteed by the if condition above.
@@ -216,6 +217,7 @@
             // Increase the contrast in the weight
             chebyshevWeight = max((chebyshevWeight * chebyshevWeight * chebyshevWeight), 0.f);
         }
+#endif
         return chebyshevWeight;
     }
 
@@ -541,7 +543,7 @@ void DDGIProbeBlendingCS(
             float misWeight = pdf_weight * chebyshevWeight / (pdf_weight_sum + chebyshevWeight_0); // balanceHeuristics
     #if ONLY_ADJACENT
             // pdf_weight = 1.f; // biased
-            misWeight = pdf_weight / pdf_weight_sum;
+            misWeight = pdf_weight * chebyshevWeight / pdf_weight_sum;
     #endif
             // Load the ray radiance and store it in shared memory
             RayRadiance[rayIndex] = DDGILoadProbeRayRadiance(RayData, rayDataTexCoords, volume) * chebyshevWeight_0 
